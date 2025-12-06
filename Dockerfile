@@ -1,12 +1,11 @@
-# FROM alpine:3.20 AS builder
-FROM stu2116edwardhu/nginx:latest AS builder
+FROM alpine:3.20 AS builder
+# FROM stu2116edwardhu/nginx:latest AS builder
 
 # 可选手动传参，否则自动抓最新版
-ARG NGINX_VERSION
-ARG OPENSSL_VERSION
-ARG ZLIB_VERSION
-ARG ZSTD_VERSION
-ARG CORERULESET_VERSION
+# ARG NGINX_VERSION
+# # ARG OPENSSL_VERSION
+# # ARG ZLIB_VERSION
+# ARG CORERULESET_VERSION
 
 WORKDIR /usr/src
 
@@ -40,22 +39,16 @@ RUN set -eux && apk add --no-cache \
     g++ \
     wget \
     && \
-    # 版本号（优先使用构建参数；未提供则自动探测）
-    NGINX_VERSION=${NGINX_VERSION:-$(curl -s --retry 3 --retry-connrefused https://nginx.org/en/download.html | grep -Eo 'nginx-[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz' | head -n1 | cut -d'-' -f2 | cut -d'.' -f1-3)} \
+    # 各种组件的版本号获取 纯数字
+    NGINX_VERSION=$(wget -q -O - https://nginx.org/en/download.html | grep -oE 'nginx-[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | cut -d'-' -f2) \
     && \
-    OPENSSL_VERSION=${OPENSSL_VERSION:-$(curl -s --retry 3 --retry-connrefused https://www.openssl.org/source/ | grep -Eo 'openssl-[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz' | head -n1 | sed 's/openssl-//' | sed 's/\.tar\.gz//')} \
+    OPENSSL_VERSION=$(wget -q -O - https://www.openssl.org/source/ | grep -oE 'openssl-[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | cut -d'-' -f2) \
     && \
-    ZLIB_VERSION=${ZLIB_VERSION:-$(curl -s --retry 3 --retry-connrefused https://zlib.net/ | grep -Eo 'zlib[[:space:]]+[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | awk '{print $2}')} \
+    ZLIB_VERSION=$(wget -q -O - https://zlib.net/ | grep -oE 'zlib-[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | cut -d'-' -f2) \
     && \
-    ZSTD_VERSION=${ZSTD_VERSION:-$(curl -Ls --retry 3 --retry-connrefused https://github.com/facebook/zstd/releases/latest | grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | cut -c2-)} \
+    ZSTD_VERSION=$(curl -Ls https://github.com/facebook/zstd/releases/latest | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | cut -c2-) \
     && \
-    CORERULESET_VERSION=${CORERULESET_VERSION:-$(curl -s --retry 3 --retry-connrefused https://api.github.com/repos/coreruleset/coreruleset/releases/latest | grep -oE '"tag_name": "[^"]+' | cut -d'"' -f4 | sed 's/v//')} \
-    && \
-    # 回退默认版本，避免抓取失败导致构建中断
-    NGINX_VERSION=${NGINX_VERSION:-1.29.0} \
-    && OPENSSL_VERSION=${OPENSSL_VERSION:-3.5.4} \
-    && ZLIB_VERSION=${ZLIB_VERSION:-1.3.1} \
-    && ZSTD_VERSION=${ZSTD_VERSION:-1.5.7} \
+    CORERULESET_VERSION=$(curl -s https://api.github.com/repos/coreruleset/coreruleset/releases/latest | grep -oE '"tag_name": "[^"]+' | cut -d'"' -f4 | sed 's/v//') \
     && \
     # ModSecurity模块和ModSecurity-nginx模块
     git clone --depth 1 https://github.com/owasp-modsecurity/ModSecurity \
@@ -99,13 +92,13 @@ RUN set -eux && apk add --no-cache \
     # echo "==> Using versions: nginx-${NGINX_VERSION}, openssl-${OPENSSL_VERSION}, zlib-${ZLIB_VERSION}" && \
     \
     # 下载需要的模块 填入版本号
-    curl -fSL --retry 3 https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz -o nginx.tar.gz && \
+    curl -fSL https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz -o nginx.tar.gz && \
     tar xzf nginx.tar.gz && \
     \
-    curl -fSL --retry 3 https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz -o openssl.tar.gz && \
+    curl -fSL https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz -o openssl.tar.gz && \
     tar xzf openssl.tar.gz && \
     \
-    curl -fSL --retry 3 https://zlib.net/zlib-${ZLIB_VERSION}.tar.gz -o zlib.tar.gz && \
+    curl -fSL https://fossies.org/linux/misc/zlib-${ZLIB_VERSION}.tar.gz -o zlib.tar.gz && \
     tar xzf zlib.tar.gz && \
     \
     # 编译安装步骤
