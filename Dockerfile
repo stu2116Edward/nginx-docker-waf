@@ -41,15 +41,15 @@ RUN set -eux && apk add --no-cache \
     wget \
     && \
     # 版本号（优先使用构建参数；未提供则自动探测）
-    NGINX_VERSION=${NGINX_VERSION:-$(curl -s https://nginx.org/en/download.html | grep -Eo 'nginx-[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz' | head -n1 | cut -d'-' -f2 | cut -d'.' -f1-3)} \
+    NGINX_VERSION=${NGINX_VERSION:-$(curl -s --retry 3 --retry-connrefused https://nginx.org/en/download.html | grep -Eo 'nginx-[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz' | head -n1 | cut -d'-' -f2 | cut -d'.' -f1-3)} \
     && \
-    OPENSSL_VERSION=${OPENSSL_VERSION:-$(curl -s https://www.openssl.org/source/ | grep -Eo 'openssl-[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz' | head -n1 | sed 's/openssl-//' | sed 's/\.tar\.gz//')} \
+    OPENSSL_VERSION=${OPENSSL_VERSION:-$(curl -s --retry 3 --retry-connrefused https://www.openssl.org/source/ | grep -Eo 'openssl-[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz' | head -n1 | sed 's/openssl-//' | sed 's/\.tar\.gz//')} \
     && \
-    ZLIB_VERSION=${ZLIB_VERSION:-$(curl -s https://zlib.net/ | grep -Eo 'zlib[[:space:]]+[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | awk '{print $2}')} \
+    ZLIB_VERSION=${ZLIB_VERSION:-$(curl -s --retry 3 --retry-connrefused https://zlib.net/ | grep -Eo 'zlib[[:space:]]+[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | awk '{print $2}')} \
     && \
-    ZSTD_VERSION=${ZSTD_VERSION:-$(curl -Ls https://github.com/facebook/zstd/releases/latest | grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | cut -c2-)} \
+    ZSTD_VERSION=${ZSTD_VERSION:-$(curl -Ls --retry 3 --retry-connrefused https://github.com/facebook/zstd/releases/latest | grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | cut -c2-)} \
     && \
-    CORERULESET_VERSION=${CORERULESET_VERSION:-$(curl -s https://api.github.com/repos/coreruleset/coreruleset/releases/latest | grep -oE '"tag_name": "[^"]+' | cut -d'"' -f4 | sed 's/v//')} \
+    CORERULESET_VERSION=${CORERULESET_VERSION:-$(curl -s --retry 3 --retry-connrefused https://api.github.com/repos/coreruleset/coreruleset/releases/latest | grep -oE '"tag_name": "[^"]+' | cut -d'"' -f4 | sed 's/v//')} \
     && \
     # 回退默认版本，避免抓取失败导致构建中断
     NGINX_VERSION=${NGINX_VERSION:-1.29.0} \
