@@ -38,6 +38,8 @@ RUN set -eux && apk add --no-cache \
     make \
     g++ \
     wget \
+    ca-certificates \
+    && update-ca-certificates \
     && \
     # 集中定义默认版本（生产环境兜底）
     DEFAULT_NGINX="1.29.0" \
@@ -47,15 +49,21 @@ RUN set -eux && apk add --no-cache \
     && DEFAULT_CRS="3.3.5" \
     && \
     # 各种组件的版本号获取 纯数字
-    NGINX_VERSION=$(wget -q -O - https://nginx.org/en/download.html 2>/dev/null | grep -oE 'nginx-[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | cut -d'-' -f2) || NGINX_VERSION="$DEFAULT_NGINX" \
+    # 尝试获取最新版本，失败则使用默认版本
+    NGINX_VERSION=$( (wget -q -O - https://nginx.org/en/download.html 2>/dev/null || echo "") | grep -oE 'nginx-[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | cut -d'-' -f2 ) \
+    && if [ -z "$NGINX_VERSION" ]; then NGINX_VERSION="$DEFAULT_NGINX"; fi \
     && \
-    OPENSSL_VERSION=$(wget -q -O - https://www.openssl.org/source/ 2>/dev/null | grep -oE 'openssl-[0-9]+\.[0-9]+\.[0-9]+[a-z]*' | head -n1 | cut -d'-' -f2) || OPENSSL_VERSION="$DEFAULT_OPENSSL" \
+    OPENSSL_VERSION=$( (wget -q -O - https://www.openssl.org/source/ 2>/dev/null || echo "") | grep -oE 'openssl-[0-9]+\.[0-9]+\.[0-9]+[a-z]*' | head -n1 | cut -d'-' -f2 ) \
+    && if [ -z "$OPENSSL_VERSION" ]; then OPENSSL_VERSION="$DEFAULT_OPENSSL"; fi \
     && \
-    ZLIB_VERSION=$(wget -q -O - https://zlib.net/ 2>/dev/null | grep -oE 'zlib-[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | cut -d'-' -f2) || ZLIB_VERSION="$DEFAULT_ZLIB" \
+    ZLIB_VERSION=$( (wget -q -O - https://zlib.net/ 2>/dev/null || echo "") | grep -oE 'zlib-[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | cut -d'-' -f2 ) \
+    && if [ -z "$ZLIB_VERSION" ]; then ZLIB_VERSION="$DEFAULT_ZLIB"; fi \
     && \
-    ZSTD_VERSION=$(curl -sSL --connect-timeout 10 https://github.com/facebook/zstd/releases/latest 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | cut -c2-) || ZSTD_VERSION="$DEFAULT_ZSTD" \
+    ZSTD_VERSION=$( (curl -sSL --connect-timeout 10 https://github.com/facebook/zstd/releases/latest 2>/dev/null || echo "") | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | cut -c2- ) \
+    && if [ -z "$ZSTD_VERSION" ]; then ZSTD_VERSION="$DEFAULT_ZSTD"; fi \
     && \
-    CORERULESET_VERSION=$(curl -sSL --connect-timeout 10 https://api.github.com/repos/coreruleset/coreruleset/releases/latest 2>/dev/null | grep -oE '"tag_name": "[^"]+' | cut -d'"' -f4 | sed 's/v//') || CORERULESET_VERSION="$DEFAULT_CRS" \
+    CORERULESET_VERSION=$( (curl -sSL --connect-timeout 10 https://api.github.com/repos/coreruleset/coreruleset/releases/latest 2>/dev/null || echo "") | grep -oE '"tag_name": "[^"]+' | cut -d'"' -f4 | sed 's/v//' ) \
+    && if [ -z "$CORERULESET_VERSION" ]; then CORERULESET_VERSION="$DEFAULT_CRS"; fi \
     && \
     # ModSecurity模块和ModSecurity-nginx模块
     git clone --depth 1 https://github.com/owasp-modsecurity/ModSecurity \
@@ -105,9 +113,10 @@ RUN set -eux && apk add --no-cache \
     curl -fSL https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz -o openssl.tar.gz && \
     tar xzf openssl.tar.gz && \
     \
-    curl -fSL https://fossies.org/linux/misc/zlib-${ZLIB_VERSION}.tar.gz -o zlib.tar.gz && \
-    tar xzf zlib.tar.gz && \
-    \
+    wget -q https://zlib.net/zlib-${ZLIB_VERSION}.tar.gz -O zlib.tar.gz \
+    && tar xzf zlib.tar.gz \
+    || (wget -q https://github.com/madler/zlib/releases/download/v${ZLIB_VERSION}/zlib-${ZLIB_VERSION}.tar.gz -O zlib.tar.gz && tar xzf zlib.tar.gz) \
+    && \
     # 编译安装步骤
     cd nginx-${NGINX_VERSION} && \
     # ./configure \
@@ -184,19 +193,21 @@ ENV LD_LIBRARY_PATH=/usr/local/modsecurity/lib
 
 # 创建配置目录并下载必要文件
 RUN set -eux \
-    && apk add --no-cache lua5.1 lua5.1-dev pcre pcre-dev yajl yajl-dev curl \
+    && apk add --no-cache lua5.1 lua5.1-dev pcre pcre-dev yajl yajl-dev curl ca-certificates \
+    && update-ca-certificates \
     && mkdir -p /etc/nginx/modsec/plugins \
     && DEFAULT_CRS="3.3.5" \
-    && CORERULESET_VERSION=$(curl -sSL --connect-timeout 10 https://api.github.com/repos/coreruleset/coreruleset/releases/latest 2>/dev/null | grep -oE '"tag_name": "[^"]+' | cut -d'"' -f4 | sed 's/v//') || CORERULESET_VERSION="$DEFAULT_CRS" \
-    && wget https://github.com/coreruleset/coreruleset/archive/v${CORERULESET_VERSION}.tar.gz \
-    && tar -xzf v${CORERULESET_VERSION}.tar.gz --strip-components=1 -C /etc/nginx/modsec \
-    && rm -f v${CORERULESET_VERSION}.tar.gz \
-    && wget -P /etc/nginx/modsec/plugins https://raw.githubusercontent.com/coreruleset/wordpress-rule-exclusions-plugin/master/plugins/wordpress-rule-exclusions-before.conf \
-    && wget -P /etc/nginx/modsec/plugins https://raw.githubusercontent.com/coreruleset/wordpress-rule-exclusions-plugin/master/plugins/wordpress-rule-exclusions-config.conf \
-    && wget -P /etc/nginx/modsec/plugins https://raw.githubusercontent.com/kejilion/nginx/main/waf/ldnmp-before.conf \
+    && CORERULESET_VERSION=$( (curl -sSL --connect-timeout 10 https://api.github.com/repos/coreruleset/coreruleset/releases/latest 2>/dev/null || echo "") | grep -oE '"tag_name": "[^"]+' | cut -d'"' -f4 | sed 's/v//' ) \
+    && if [ -z "$CORERULESET_VERSION" ]; then CORERULESET_VERSION="$DEFAULT_CRS"; fi \
+    && wget -q https://github.com/coreruleset/coreruleset/archive/v${CORERULESET_VERSION}.tar.gz -O crs.tar.gz \
+    && tar -xzf crs.tar.gz --strip-components=1 -C /etc/nginx/modsec \
+    && rm -f crs.tar.gz \
+    && wget -q -P /etc/nginx/modsec/plugins https://raw.githubusercontent.com/coreruleset/wordpress-rule-exclusions-plugin/master/plugins/wordpress-rule-exclusions-before.conf \
+    && wget -q -P /etc/nginx/modsec/plugins https://raw.githubusercontent.com/coreruleset/wordpress-rule-exclusions-plugin/master/plugins/wordpress-rule-exclusions-config.conf \
+    && wget -q -P /etc/nginx/modsec/plugins https://raw.githubusercontent.com/kejilion/nginx/main/waf/ldnmp-before.conf \
     && cp /etc/nginx/modsec/crs-setup.conf.example /etc/nginx/modsec/crs-setup.conf \
     && echo 'SecAction "id:900110, phase:1, pass, setvar:tx.inbound_anomaly_score_threshold=30, setvar:tx.outbound_anomaly_score_threshold=16"' >> /etc/nginx/modsec/crs-setup.conf \
-    && wget https://raw.githubusercontent.com/owasp-modsecurity/ModSecurity/v3/master/modsecurity.conf-recommended -O /etc/nginx/modsec/modsecurity.conf \
+    && wget -q https://raw.githubusercontent.com/owasp-modsecurity/ModSecurity/v3/master/modsecurity.conf-recommended -O /etc/nginx/modsec/modsecurity.conf \
     && sed -i 's/SecRuleEngine DetectionOnly/SecRuleEngine On/' /etc/nginx/modsec/modsecurity.conf \
     && sed -i 's/SecPcreMatchLimit [0-9]\+/SecPcreMatchLimit 20000/' /etc/nginx/modsec/modsecurity.conf \
     && sed -i 's/SecPcreMatchLimitRecursion [0-9]\+/SecPcreMatchLimitRecursion 20000/' /etc/nginx/modsec/modsecurity.conf \
@@ -208,8 +219,8 @@ RUN set -eux \
     && echo 'Include /etc/nginx/modsec/plugins/*-before.conf' >> /etc/nginx/modsec/modsecurity.conf \
     && echo 'Include /etc/nginx/modsec/rules/*.conf' >> /etc/nginx/modsec/modsecurity.conf \
     && echo 'Include /etc/nginx/modsec/plugins/*-after.conf' >> /etc/nginx/modsec/modsecurity.conf \
-    && ldconfig /usr/lib \
-    && wget https://raw.githubusercontent.com/owasp-modsecurity/ModSecurity/v3/master/unicode.mapping -O /etc/nginx/modsec/unicode.mapping \
+    && ldconfig \
+    && wget -q https://raw.githubusercontent.com/owasp-modsecurity/ModSecurity/v3/master/unicode.mapping -O /etc/nginx/modsec/unicode.mapping \
     && apk del curl \
     && rm -rf /var/cache/apk/*
 
