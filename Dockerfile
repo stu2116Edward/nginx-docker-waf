@@ -47,46 +47,15 @@ RUN set -eux && apk add --no-cache \
     && DEFAULT_CRS="3.3.5" \
     && \
     # 各种组件的版本号获取 纯数字
-    # 使用子shell命令替换或临时变量
-    NGINX_VERSION=$(
-        wget -q -O - https://nginx.org/en/download.html 2>/dev/null | \
-        grep -oE 'nginx-[0-9]+\.[0-9]+\.[0-9]+' | \
-        head -n1 | \
-        cut -d'-' -f2 || \
-        echo "1.29.0"
-    ) \
+    NGINX_VERSION=$(wget -q -O - https://nginx.org/en/download.html 2>/dev/null | grep -oE 'nginx-[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | cut -d'-' -f2) || NGINX_VERSION="$DEFAULT_NGINX" \
     && \
-    OPENSSL_VERSION=$(
-        wget -q -O - https://www.openssl.org/source/ 2>/dev/null | \
-        grep -oE 'openssl-[0-9]+\.[0-9]+\.[0-9]+[a-z]*' | \
-        head -n1 | \
-        cut -d'-' -f2 || \
-        echo "3.3.0"
-    ) \
+    OPENSSL_VERSION=$(wget -q -O - https://www.openssl.org/source/ 2>/dev/null | grep -oE 'openssl-[0-9]+\.[0-9]+\.[0-9]+[a-z]*' | head -n1 | cut -d'-' -f2) || OPENSSL_VERSION="$DEFAULT_OPENSSL" \
     && \
-    ZLIB_VERSION=$(
-        wget -q -O - https://zlib.net/ 2>/dev/null | \
-        grep -oE 'zlib-[0-9]+\.[0-9]+\.[0-9]+' | \
-        head -n1 | \
-        cut -d'-' -f2 || \
-        echo "1.3.1"
-    ) \
+    ZLIB_VERSION=$(wget -q -O - https://zlib.net/ 2>/dev/null | grep -oE 'zlib-[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | cut -d'-' -f2) || ZLIB_VERSION="$DEFAULT_ZLIB" \
     && \
-    ZSTD_VERSION=$(
-        curl -sSL --connect-timeout 10 https://github.com/facebook/zstd/releases/latest 2>/dev/null | \
-        grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | \
-        head -n1 | \
-        cut -c2- || \
-        echo "1.5.7"
-    ) \
+    ZSTD_VERSION=$(curl -sSL --connect-timeout 10 https://github.com/facebook/zstd/releases/latest 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | cut -c2-) || ZSTD_VERSION="$DEFAULT_ZSTD" \
     && \
-    CORERULESET_VERSION=$(
-        curl -sSL --connect-timeout 10 https://api.github.com/repos/coreruleset/coreruleset/releases/latest 2>/dev/null | \
-        grep -oE '"tag_name": "[^"]+' | \
-        cut -d'"' -f4 | \
-        sed 's/v//' || \
-        echo "3.3.5"
-    ) \
+    CORERULESET_VERSION=$(curl -sSL --connect-timeout 10 https://api.github.com/repos/coreruleset/coreruleset/releases/latest 2>/dev/null | grep -oE '"tag_name": "[^"]+' | cut -d'"' -f4 | sed 's/v//') || CORERULESET_VERSION="$DEFAULT_CRS" \
     && \
     # ModSecurity模块和ModSecurity-nginx模块
     git clone --depth 1 https://github.com/owasp-modsecurity/ModSecurity \
@@ -217,13 +186,8 @@ ENV LD_LIBRARY_PATH=/usr/local/modsecurity/lib
 RUN set -eux \
     && apk add --no-cache lua5.1 lua5.1-dev pcre pcre-dev yajl yajl-dev curl \
     && mkdir -p /etc/nginx/modsec/plugins \
-    && CORERULESET_VERSION=$(
-        curl -sSL --connect-timeout 10 https://api.github.com/repos/coreruleset/coreruleset/releases/latest 2>/dev/null | \
-        grep -oE '"tag_name": "[^"]+' | \
-        cut -d'"' -f4 | \
-        sed 's/v//' || \
-        echo "3.3.5"
-    ) \
+    && DEFAULT_CRS="3.3.5" \
+    && CORERULESET_VERSION=$(curl -sSL --connect-timeout 10 https://api.github.com/repos/coreruleset/coreruleset/releases/latest 2>/dev/null | grep -oE '"tag_name": "[^"]+' | cut -d'"' -f4 | sed 's/v//') || CORERULESET_VERSION="$DEFAULT_CRS" \
     && wget https://github.com/coreruleset/coreruleset/archive/v${CORERULESET_VERSION}.tar.gz \
     && tar -xzf v${CORERULESET_VERSION}.tar.gz --strip-components=1 -C /etc/nginx/modsec \
     && rm -f v${CORERULESET_VERSION}.tar.gz \
